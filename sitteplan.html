@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sitteplan</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Work+Sans:wght@400;500;600;700&display=swap');
+
+  :root{
+    --board-bg: #26352d;
+    --board-bg-2: #33473c;
+    --board-bg-3: #3c5347;
+    --board-line: rgba(241,237,225,0.16);
+    --cream: #f1ede1;
+    --cream-dim: rgba(241,237,225,0.62);
+    --cream-faint: rgba(241,237,225,0.38);
+    --yellow: #e8c468;
+    --blue: #8fb8c9;
+    --coral: #e2946b;
+    --wood: #9c7248;
+    --radius: 12px;
+  }
+
+  *{ box-sizing: border-box; }
+
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 15% 10%, rgba(255,255,255,0.03), transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(255,255,255,0.025), transparent 45%),
+      var(--board-bg);
+    color: var(--cream);
+    font-family: 'Work Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app{
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+
+  /* ---------- header ---------- */
+  header.hero{
+    margin-bottom: 28px;
+  }
+  header.hero h1{
+    font-family: 'Caveat', cursive;
+    font-weight: 700;
+    font-size: 3.2rem;
+    line-height: 1;
+    margin: 0 0 6px;
+    color: var(--yellow);
+  }
+  header.hero p{
+    margin: 0;
+    max-width: 62ch;
+    color: var(--cream-dim);
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  .legend{
+    display:flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-top: 16px;
+    font-size: 0.85rem;
+    color: var(--cream-dim);
+  }
+  .legend-item{ display:flex; align-items:center; gap:8px; }
+  .legend-swatch{ width: 22px; height: 4px; border-radius: 2px; background: var(--board-line); }
+  .legend-swatch.repeat{ background: var(--coral); }
+
+  /* ---------- layout ---------- */
+  .layout{
+    display:grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 26px;
+    align-items:start;
+  }
+  @media (max-width: 780px){
+    .layout{ grid-template-columns: 1fr; }
+  }
+
+  #loading{
+    color: var(--cream-dim);
+    font-style: italic;
+    padding: 40px 0;
+  }
+
+  /* ---------- board ---------- */
+  .board-panel{ min-width:0; }
+
+  .row-wrap{ margin-bottom: 24px; }
+  .row-label{
+    font-size: 0.78rem;
+    color: var(--cream-faint);
+    margin-bottom: 6px;
+    letter-spacing: 0.02em;
+  }
+  .desk-row{
+    display:flex;
+    border-radius: var(--radius);
+    overflow:hidden;
+    box-shadow: 0 3px 0 var(--wood), 0 8px 14px rgba(0,0,0,0.18);
+  }
+  .seat{
+    flex: 1 1 0;
+    background: var(--board-bg-2);
+    padding: 16px 8px;
+    text-align:center;
+    font-weight: 600;
+    font-size: 0.95rem;
+    min-width: 0;
+    overflow-wrap: break-word;
+  }
+  .divider{
+    flex: 0 0 1px;
+    background: var(--board-line);
+  }
+  .divider.divider-repeat{
+    flex: 0 0 4px;
+    background: var(--coral);
+  }
+
+  .board-actions{
+    display:flex;
+    gap: 12px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  /* ---------- buttons ---------- */
+  .btn{
+    font-family: 'Work Sans', sans-serif;
+    font-size: 0.92rem;
+    font-weight: 600;
+    padding: 11px 18px;
+    border-radius: 9px;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.08s ease, opacity 0.15s ease;
+  }
+  .btn:active{ transform: scale(0.97); }
+  .btn-primary{ background: var(--yellow); color: #2a3a31; }
+  .btn-primary:hover{ opacity:0.92; }
+  .btn-ghost{ background: transparent; color: var(--blue); border: 1.5px solid var(--blue); }
+  .btn-ghost:hover{ background: rgba(143,184,201,0.1); }
+  .btn-text{
+    background: transparent;
+    color: var(--cream-dim);
+    padding: 8px 4px;
+    text-align:left;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+  }
+  .btn-text:hover{ text-decoration-color: var(--cream-dim); }
+  .btn-danger{ color: var(--coral); }
+  .btn-danger:hover{ text-decoration-color: var(--coral); }
+
+  /* ---------- sidebar / cards ---------- */
+  .card{
+    background: var(--board-bg-2);
+    border-radius: var(--radius);
+    padding: 18px 20px 20px;
+    margin-bottom: 18px;
+  }
+  .card h2{
+    font-family: 'Caveat', cursive;
+    font-weight: 700;
+    font-size: 1.7rem;
+    margin: 0 0 10px;
+    color: var(--cream);
+  }
+
+  .stat-line{ margin: 0 0 10px; font-size: 1rem; }
+  .bar-track{
+    height: 8px;
+    background: var(--board-bg-3);
+    border-radius: 5px;
+    overflow:hidden;
+    margin-bottom: 8px;
+  }
+  .bar-fill{
+    height: 100%;
+    background: var(--yellow);
+    border-radius: 5px;
+    transition: width 0.3s ease;
+  }
+  .rounds-line{ margin: 0 0 6px; font-size: 0.85rem; color: var(--cream-dim); }
+
+  .link-toggle{
+    background:none; border:none; padding:0; margin-top:6px;
+    color: var(--blue);
+    font-size: 0.85rem;
+    cursor:pointer;
+    text-decoration: underline;
+  }
+
+  .student-detail-list{
+    list-style:none;
+    margin: 12px 0 0;
+    padding:0;
+    max-height: 220px;
+    overflow-y:auto;
+    font-size: 0.85rem;
+  }
+  .student-detail-list li{
+    padding: 5px 0;
+    border-bottom: 1px solid var(--board-line);
+    color: var(--cream-dim);
+  }
+  .student-detail-list li.needs-attention{ color: var(--coral); }
+
+  .tool-buttons{ display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
+
+  #roster-editor{ margin-top: 14px; }
+  #roster-editor label{
+    display:block;
+    font-size: 0.8rem;
+    color: var(--cream-dim);
+    margin: 12px 0 5px;
+  }
+  #roster-editor textarea, #roster-editor input[type="text"]{
+    width:100%;
+    background: var(--board-bg-3);
+    border: 1px solid var(--board-line);
+    border-radius: 8px;
+    color: var(--cream);
+    font-family: 'Work Sans', sans-serif;
+    font-size: 0.88rem;
+    padding: 9px 10px;
+    resize: vertical;
+  }
+  .error-msg{
+    color: var(--coral);
+    font-size: 0.83rem;
+    margin: 10px 0;
+  }
+  #roster-editor .btn{ margin-top: 12px; }
+
+  .card-toggle{
+    background:none; border:none; padding:0; width:100%;
+    display:flex; align-items:baseline; justify-content:space-between;
+    cursor:pointer;
+  }
+  .card-toggle h2{ margin:0; }
+  .card-toggle span{ color: var(--cream-faint); font-size: 0.85rem; }
+
+  .history-entry{
+    border-bottom: 1px solid var(--board-line);
+    padding: 8px 0;
+  }
+  .history-entry summary{
+    cursor:pointer;
+    font-size: 0.9rem;
+    color: var(--cream);
+  }
+  .history-row{
+    margin: 6px 0 0;
+    font-size: 0.82rem;
+    color: var(--cream-dim);
+  }
+  .empty-msg{ color: var(--cream-faint); font-size: 0.88rem; margin:0; }
+
+  footer{
+    margin-top: 30px;
+    color: var(--cream-faint);
+    font-size: 0.78rem;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="hero">
+    <h1>Sitteplan</h1>
+    <p>Målet er at alle i klassen etter hvert har sittet ved siden av alle andre, minst én gang i løpet av året. Denne siden foreslår en ny plassering, og holder styr på hvem som har sittet sammen før.</p>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-swatch"></span> Ny sidemakker</div>
+      <div class="legend-item"><span class="legend-swatch repeat"></span> Har sittet sammen før</div>
+    </div>
+  </header>
+
+  <div id="loading">Henter lagrede data …</div>
+
+  <main class="layout" id="app-content" hidden>
+    <section class="board-panel">
+      <div id="board"></div>
+      <div class="board-actions">
+        <button id="btn-generate" class="btn btn-ghost">Lag nytt forslag</button>
+        <button id="btn-lock" class="btn btn-primary">Lagre denne plasseringen</button>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <div class="card">
+        <h2>Fremdrift</h2>
+        <div id="progress-body"></div>
+      </div>
+
+      <div class="card">
+        <h2>Verktøy</h2>
+        <div class="tool-buttons">
+          <button id="btn-undo" class="btn btn-text">Angre forrige runde</button>
+          <button id="btn-roster-toggle" class="btn btn-text">Endre klasselisten</button>
+          <button id="btn-reset" class="btn btn-text btn-danger">Nullstill alt</button>
+        </div>
+        <div id="roster-editor" hidden>
+          <label for="roster-names">Elever (ett navn per linje)</label>
+          <textarea id="roster-names" rows="10"></textarea>
+          <label for="roster-rows">Radstørrelser (kommaseparert)</label>
+          <input id="roster-rows" type="text" />
+          <div id="roster-error" class="error-msg" hidden></div>
+          <button id="btn-roster-apply" class="btn btn-primary">Oppdater klassen</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <button id="btn-history-toggle" class="card-toggle">
+          <h2>Tidligere runder</h2>
+          <span id="history-count"></span>
+        </button>
+        <div id="history-list" hidden></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer id="storage-note">Alt lagres automatisk i nettleseren på denne enheten, og er bare synlig for deg.</footer>
+</div>
+
+<script>
+(function(){
+  const STORAGE_KEY = 'sitteplan-state-v1';
+  const DEFAULT_STUDENTS = ["Ailin","Alva","Amalie","Anton","Are","Aurora","Cornelie","Hunter","Ilyana","Jakob","John","Magnus","Mio","Samuel","Solveig","Sondre","Synne","Timur","Vilje"];
+  const DEFAULT_ROWS = [5,5,5,4];
+
+  let state = null;
+  let rosterEditorOpen = false;
+  let historyOpen = false;
+  let detailOpen = false;
+
+  function pairKey(a,b){ return [a,b].sort().join('\u241F'); }
+
+  function computePairCounts(history){
+    const map = new Map();
+    history.forEach(round=>{
+      round.rows.forEach(row=>{
+        for(let i=0;i<row.length-1;i++){
+          const k = pairKey(row[i], row[i+1]);
+          map.set(k, (map.get(k)||0)+1);
+        }
+      });
+    });
+    return map;
+  }
+
+  function toRows(flat, rowSizes){
+    const rows=[]; let idx=0;
+    rowSizes.forEach(size=>{ rows.push(flat.slice(idx, idx+size)); idx += size; });
+    return rows;
+  }
+
+  function totalCost(rows, pairCounts){
+    let sum=0;
+    rows.forEach(row=>{
+      for(let i=0;i<row.length-1;i++){
+        sum += pairCounts.get(pairKey(row[i], row[i+1])) || 0;
+      }
+    });
+    return sum;
+  }
+
+  function shuffle(arr){
+    const a=[...arr];
+    for(let i=a.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));
+      [a[i],a[j]]=[a[j],a[i]];
+    }
+    return a;
+  }
+
+  function generateArrangement(students, rowSizes, pairCounts){
+    let best=null, bestCost=Infinity;
+    const restarts = 80;
+    for(let r=0; r<restarts; r++){
+      let flat = shuffle(students);
+      let rows = toRows(flat, rowSizes);
+      let cost = totalCost(rows, pairCounts);
+      let iterations = 1500;
+      while(iterations-- > 0 && cost > 0){
+        const i = Math.floor(Math.random()*flat.length);
+        const j = Math.floor(Math.random()*flat.length);
+        if(i===j) continue;
+        [flat[i],flat[j]] = [flat[j],flat[i]];
+        const newRows = toRows(flat, rowSizes);
+        const newCost = totalCost(newRows, pairCounts);
+        if(newCost <= cost){ cost = newCost; rows = newRows; }
+        else { [flat[i],flat[j]] = [flat[j],flat[i]]; }
+      }
+      if(cost < bestCost){ bestCost = cost; best = rows; }
+      if(bestCost === 0) break;
+    }
+    return best;
+  }
+
+  async function storageGetState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+
+  async function persist(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        students: state.students,
+        rowSizes: state.rowSizes,
+        history: state.history,
+        draft: state.draft
+      }));
+    }catch(e){ console.error('Kunne ikke lagre', e); }
+  }
+
+  function renderBoard(){
+    const board = document.getElementById('board');
+    board.innerHTML = '';
+    const pairCounts = computePairCounts(state.history);
+    state.draft.forEach((row, rIdx)=>{
+      const rowWrap = document.createElement('div');
+      rowWrap.className = 'row-wrap';
+      const label = document.createElement('div');
+      label.className = 'row-label';
+      label.textContent = 'Rad ' + (rIdx+1);
+      const deskRow = document.createElement('div');
+      deskRow.className = 'desk-row';
+      row.forEach((name, i)=>{
+        const seat = document.createElement('div');
+        seat.className = 'seat';
+        seat.textContent = name;
+        deskRow.appendChild(seat);
+        if(i < row.length-1){
+          const count = pairCounts.get(pairKey(name, row[i+1])) || 0;
+          const div = document.createElement('div');
+          div.className = count>0 ? 'divider divider-repeat' : 'divider';
+          if(count>0){ div.title = name + ' og ' + row[i+1] + ' har sittet sammen før'; }
+          deskRow.appendChild(div);
+        }
+      });
+      rowWrap.appendChild(label);
+      rowWrap.appendChild(deskRow);
+      board.appendChild(rowWrap);
+    });
+  }
+
+  function renderProgress(){
+    const el = document.getElementById('progress-body');
+    const n = state.students.length;
+    const total = n*(n-1)/2;
+    const pairCounts = computePairCounts(state.history);
+    const covered = pairCounts.size;
+    const pct = total ? Math.round((covered/total)*100) : 0;
+    const rounds = state.history.length;
+
+    el.innerHTML = '';
+
+    const statLine = document.createElement('p');
+    statLine.className = 'stat-line';
+    statLine.textContent = covered + ' av ' + total + ' par har sittet sammen';
+    el.appendChild(statLine);
+
+    const barTrack = document.createElement('div');
+    barTrack.className = 'bar-track';
+    const barFill = document.createElement('div');
+    barFill.className = 'bar-fill';
+    barFill.style.width = pct + '%';
+    barTrack.appendChild(barFill);
+    el.appendChild(barTrack);
+
+    const roundsLine = document.createElement('p');
+    roundsLine.className = 'rounds-line';
+    roundsLine.textContent = rounds === 0
+      ? 'Ingen runder lagret ennå.'
+      : (rounds === 1 ? '1 runde lagret så langt.' : rounds + ' runder lagret så langt.');
+    el.appendChild(roundsLine);
+
+    const detailToggle = document.createElement('button');
+    detailToggle.className = 'link-toggle';
+    detailToggle.textContent = detailOpen ? 'Skjul elevoversikt' : 'Vis elevoversikt';
+    detailToggle.onclick = ()=>{ detailOpen = !detailOpen; renderProgress(); };
+    el.appendChild(detailToggle);
+
+    if(detailOpen){
+      const neighborSets = new Map();
+      state.students.forEach(s=>neighborSets.set(s, new Set()));
+      state.history.forEach(round=>round.rows.forEach(row=>{
+        for(let i=0;i<row.length-1;i++){
+          const a=row[i], b=row[i+1];
+          if(neighborSets.has(a)) neighborSets.get(a).add(b);
+          if(neighborSets.has(b)) neighborSets.get(b).add(a);
+        }
+      }));
+      const list = document.createElement('ul');
+      list.className = 'student-detail-list';
+      const maxPossible = n-1;
+      [...state.students].sort((a,b)=> neighborSets.get(a).size - neighborSets.get(b).size).forEach(s=>{
+        const li = document.createElement('li');
+        const k = neighborSets.get(s).size;
+        li.textContent = s + ' — ' + k + ' av ' + maxPossible + ' sidemakkere';
+        if(k===0 && rounds>0) li.classList.add('needs-attention');
+        list.appendChild(li);
+      });
+      el.appendChild(list);
+    }
+  }
+
+  function renderHistory(){
+    const countEl = document.getElementById('history-count');
+    countEl.textContent = String(state.history.length);
+    const listEl = document.getElementById('history-list');
+    listEl.hidden = !historyOpen;
+    listEl.innerHTML = '';
+    if(!state.history.length){
+      const p = document.createElement('p');
+      p.className = 'empty-msg';
+      p.textContent = 'Ingen runder er lagret ennå.';
+      listEl.appendChild(p);
+      return;
+    }
+    const total = state.history.length;
+    [...state.history].reverse().forEach((round, idxFromEnd)=>{
+      const roundNumber = total - idxFromEnd;
+      const wrap = document.createElement('details');
+      wrap.className = 'history-entry';
+      const summary = document.createElement('summary');
+      const dateStr = new Date(round.date).toLocaleDateString('nb-NO', {day:'numeric', month:'short', year:'numeric'});
+      summary.textContent = 'Runde ' + roundNumber + ' – ' + dateStr;
+      wrap.appendChild(summary);
+      round.rows.forEach((row, rIdx)=>{
+        const p = document.createElement('p');
+        p.className = 'history-row';
+        p.textContent = 'Rad ' + (rIdx+1) + ': ' + row.join(', ');
+        wrap.appendChild(p);
+      });
+      listEl.appendChild(wrap);
+    });
+  }
+
+  function renderAll(){
+    renderBoard();
+    renderProgress();
+    renderHistory();
+  }
+
+  function showRosterError(msg){
+    const errEl = document.getElementById('roster-error');
+    errEl.textContent = msg;
+    errEl.hidden = false;
+  }
+
+  function wireEvents(){
+    document.getElementById('btn-generate').addEventListener('click', ()=>{
+      const pairCounts = computePairCounts(state.history);
+      state.draft = generateArrangement(state.students, state.rowSizes, pairCounts);
+      persist();
+      renderAll();
+    });
+
+    document.getElementById('btn-lock').addEventListener('click', ()=>{
+      state.history.push({ id: Date.now(), date: new Date().toISOString(), rows: state.draft });
+      const pairCounts = computePairCounts(state.history);
+      state.draft = generateArrangement(state.students, state.rowSizes, pairCounts);
+      persist();
+      renderAll();
+    });
+
+    document.getElementById('btn-undo').addEventListener('click', ()=>{
+      if(!state.history.length) return;
+      if(!confirm('Vil du angre siste lagrede runde? Den blir slettet.')) return;
+      state.history.pop();
+      persist();
+      renderAll();
+    });
+
+    document.getElementById('btn-reset').addEventListener('click', ()=>{
+      if(!confirm('Dette sletter alle lagrede runder. Klasselisten beholdes. Er du sikker?')) return;
+      state.history = [];
+      const pairCounts = computePairCounts(state.history);
+      state.draft = generateArrangement(state.students, state.rowSizes, pairCounts);
+      persist();
+      renderAll();
+    });
+
+    document.getElementById('btn-roster-toggle').addEventListener('click', ()=>{
+      rosterEditorOpen = !rosterEditorOpen;
+      const editor = document.getElementById('roster-editor');
+      editor.hidden = !rosterEditorOpen;
+      if(rosterEditorOpen){
+        document.getElementById('roster-names').value = state.students.join('\n');
+        document.getElementById('roster-rows').value = state.rowSizes.join(',');
+        document.getElementById('roster-error').hidden = true;
+      }
+    });
+
+    document.getElementById('btn-roster-apply').addEventListener('click', ()=>{
+      const namesRaw = document.getElementById('roster-names').value;
+      const rowsRaw = document.getElementById('roster-rows').value;
+
+      const names = namesRaw.split('\n').map(s=>s.trim()).filter(Boolean);
+      const rowSizes = rowsRaw.split(',').map(s=>parseInt(s.trim(),10)).filter(n=>!isNaN(n) && n>0);
+
+      if(names.length === 0){
+        showRosterError('Legg inn minst én elev.');
+        return;
+      }
+      const lowerSet = new Set();
+      const dup = names.find(n=>{
+        const l = n.toLowerCase();
+        if(lowerSet.has(l)) return true;
+        lowerSet.add(l);
+        return false;
+      });
+      if(dup){
+        showRosterError('To elever heter "' + dup + '". Gi dem noe som skiller dem, for eksempel etternavn.');
+        return;
+      }
+      if(rowSizes.length === 0){
+        showRosterError('Skriv inn radstørrelser, for eksempel 5,5,5,4.');
+        return;
+      }
+      const sum = rowSizes.reduce((a,b)=>a+b,0);
+      if(sum !== names.length){
+        showRosterError('Radene har plass til ' + sum + ' elever, men lista har ' + names.length + '. Juster tallene så de stemmer.');
+        return;
+      }
+
+      state.students = names;
+      state.rowSizes = rowSizes;
+      const pairCounts = computePairCounts(state.history);
+      state.draft = generateArrangement(state.students, state.rowSizes, pairCounts);
+      rosterEditorOpen = false;
+      document.getElementById('roster-editor').hidden = true;
+      persist();
+      renderAll();
+    });
+
+    document.getElementById('btn-history-toggle').addEventListener('click', ()=>{
+      historyOpen = !historyOpen;
+      renderHistory();
+    });
+  }
+
+  async function init(){
+    const loaded = await storageGetState();
+
+    let storageAvailable = true;
+    try{ localStorage.setItem('__test__','1'); localStorage.removeItem('__test__'); }catch(e){ storageAvailable = false; }
+    if(!storageAvailable){
+      document.getElementById('storage-note').textContent =
+        'Lagring er ikke tilgjengelig i denne nettleseren – endringer forsvinner om du lukker fanen.';
+    }
+
+    if(loaded && Array.isArray(loaded.students) && loaded.students.length){
+      state = {
+        students: loaded.students,
+        rowSizes: (Array.isArray(loaded.rowSizes) && loaded.rowSizes.length) ? loaded.rowSizes : [...DEFAULT_ROWS],
+        history: Array.isArray(loaded.history) ? loaded.history : [],
+        draft: Array.isArray(loaded.draft) ? loaded.draft : null
+      };
+    } else {
+      state = { students: [...DEFAULT_STUDENTS], rowSizes: [...DEFAULT_ROWS], history: [], draft: null };
+    }
+
+    if(!state.draft){
+      const pairCounts = computePairCounts(state.history);
+      state.draft = generateArrangement(state.students, state.rowSizes, pairCounts);
+      persist();
+    }
+
+    wireEvents();
+    document.getElementById('loading').hidden = true;
+    document.getElementById('app-content').hidden = false;
+    renderAll();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
