@@ -224,7 +224,7 @@
     color: var(--cream-dim);
     margin: 12px 0 5px;
   }
-  #roster-editor textarea, #roster-editor input[type="text"],
+  #roster-editor textarea, #roster-editor input[type="text"], #roster-editor select,
   #manual-entry textarea, #manual-entry input[type="text"], #manual-entry input[type="date"]{
     width:100%;
     background: var(--board-bg-3);
@@ -236,6 +236,24 @@
     padding: 9px 10px;
     resize: vertical;
     color-scheme: dark;
+  }
+  .inline-form{
+    display:flex;
+    gap: 8px;
+    align-items:center;
+  }
+  .inline-form input, .inline-form select{ flex: 1 1 auto; min-width: 0; }
+  .inline-form .btn{ flex: 0 0 auto; margin-top: 0 !important; white-space: nowrap; }
+  .btn-danger-outline{
+    background: transparent;
+    border: 1.5px solid var(--coral);
+    color: var(--coral);
+  }
+  .btn-danger-outline:hover{ background: rgba(226,148,107,0.1); }
+  .divider-line{
+    border: none;
+    border-top: 1px solid var(--board-line);
+    margin: 16px 0;
   }
   .hint-text{
     font-size: 0.8rem;
@@ -322,12 +340,29 @@
           <button id="btn-reset" class="btn btn-text btn-danger">Nullstill alt</button>
         </div>
         <div id="roster-editor" hidden>
-          <label for="roster-names">Elever (ett navn per linje)</label>
+          <label for="add-student-name">Legg til en elev</label>
+          <div class="inline-form">
+            <input id="add-student-name" type="text" placeholder="Navn" />
+            <button id="btn-add-student" class="btn btn-ghost">Legg til</button>
+          </div>
+          <div id="add-student-error" class="error-msg" hidden></div>
+
+          <label for="remove-student-select">Fjern en elev</label>
+          <div class="inline-form">
+            <select id="remove-student-select"></select>
+            <button id="btn-remove-student" class="btn btn-danger-outline">Fjern</button>
+          </div>
+          <div id="remove-student-error" class="error-msg" hidden></div>
+          <p class="hint-text">Radstørrelsene justeres automatisk når du legger til eller fjerner (minste rad vokser, største krympes). Juster dem selv nedenfor om det ikke stemmer med klasserommet.</p>
+
+          <hr class="divider-line" />
+
+          <label for="roster-names">Hele klasselisten (ett navn per linje)</label>
           <textarea id="roster-names" rows="10"></textarea>
           <label for="roster-rows">Radstørrelser (kommaseparert)</label>
           <input id="roster-rows" type="text" />
           <div id="roster-error" class="error-msg" hidden></div>
-          <button id="btn-roster-apply" class="btn btn-primary">Oppdater klassen</button>
+          <button id="btn-roster-apply" class="btn btn-primary">Oppdater hele listen</button>
         </div>
       </div>
 
@@ -390,14 +425,27 @@
     return rows;
   }
 
+  function roundTimestamp(round){
+    // Use the actual seating date if given; otherwise fall back to when the
+    // round was added to the tool (id is always a real creation timestamp).
+    return round.date ? new Date(round.date).getTime() : round.id;
+  }
+
   function computeRowCounts(history, students, numRows){
     const map = new Map();
     students.forEach(s=>map.set(s, new Array(numRows).fill(0)));
+    if(history.length === 0) return map;
+    let mostRecent = history[0];
+    history.forEach(r=>{ if(roundTimestamp(r) > roundTimestamp(mostRecent)) mostRecent = r; });
     history.forEach(round=>{
+      // The chronologically most recent round counts extra, so a student
+      // who was just in a row is actively steered away from it next time —
+      // not just nudged by the long-run average.
+      const weight = (round.id === mostRecent.id) ? RECENT_ROW_MULTIPLIER : 1;
       round.rows.forEach((row, rIdx)=>{
         if(rIdx >= numRows) return;
         row.forEach(name=>{
-          if(map.has(name)) map.get(name)[rIdx] += 1;
+          if(map.has(name)) map.get(name)[rIdx] += weight;
         });
       });
     });
@@ -422,9 +470,12 @@
 
   // Pair repeats matter more than row repeats, so pair weight dominates —
   // but among equally good pair-wise options, the search still prefers
-  // spreading students across rows they've sat in less often.
+  // spreading students across rows they've sat in less often. The recent-row
+  // multiplier (applied in computeRowCounts) makes repeating last round's
+  // row about as undesirable as a repeated neighbor.
   const PAIR_WEIGHT = 6;
-  const ROW_WEIGHT = 1;
+  const ROW_WEIGHT = 2;
+  const RECENT_ROW_MULTIPLIER = 3;
 
   function arrangementCost(rows, pairCounts, rowCounts){
     let cost = 0;
@@ -458,7 +509,7 @@
         if(newCost <= cost){ cost = newCost; rows = newRows; }
         else { [flat[i],flat[j]] = [flat[j],flat[i]]; }
       }
-      if(cost < bestCost){ bestCost = cost; best = rows; }
+      if(cost < bestCost || (cost === bestCost && Math.random() < 0.5)){ bestCost = cost; best = rows; }
       if(bestCost === 0) break;
     }
     return best;
@@ -518,7 +569,12 @@
     const n = state.students.length;
     const total = n*(n-1)/2;
     const pairCounts = computePairCounts(state.history);
-    const covered = pairCounts.size;
+    const studentSet = new Set(state.students);
+    let covered = 0;
+    pairCounts.forEach((count, key)=>{
+      const parts = key.split('\u241F');
+      if(studentSet.has(parts[0]) && studentSet.has(parts[1])) covered++;
+    });
     const pct = total ? Math.round((covered/total)*100) : 0;
     const rounds = state.history.length;
 
@@ -556,8 +612,10 @@
       state.history.forEach(round=>round.rows.forEach(row=>{
         for(let i=0;i<row.length-1;i++){
           const a=row[i], b=row[i+1];
-          if(neighborSets.has(a)) neighborSets.get(a).add(b);
-          if(neighborSets.has(b)) neighborSets.get(b).add(a);
+          if(neighborSets.has(a) && neighborSets.has(b)){
+            neighborSets.get(a).add(b);
+            neighborSets.get(b).add(a);
+          }
         }
       }));
       const rowCounts = computeRowCounts(state.history, state.students, state.rowSizes.length);
@@ -643,6 +701,45 @@
     errEl.hidden = false;
   }
 
+  function showAddStudentError(msg){
+    const el = document.getElementById('add-student-error');
+    el.textContent = msg;
+    el.hidden = false;
+  }
+
+  function showRemoveStudentError(msg){
+    const el = document.getElementById('remove-student-error');
+    el.textContent = msg;
+    el.hidden = false;
+  }
+
+  function syncRosterFields(){
+    document.getElementById('roster-names').value = state.students.join('\n');
+    document.getElementById('roster-rows').value = state.rowSizes.join(',');
+    const sel = document.getElementById('remove-student-select');
+    const previousValue = sel.value;
+    sel.innerHTML = '';
+    state.students.forEach(s=>{
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      sel.appendChild(opt);
+    });
+    if(state.students.includes(previousValue)) sel.value = previousValue;
+  }
+
+  function indexOfSmallest(arr){
+    let idx = 0;
+    for(let i=1;i<arr.length;i++){ if(arr[i] < arr[idx]) idx = i; }
+    return idx;
+  }
+
+  function indexOfLargest(arr){
+    let idx = 0;
+    for(let i=1;i<arr.length;i++){ if(arr[i] > arr[idx]) idx = i; }
+    return idx;
+  }
+
   function wireEvents(){
     document.getElementById('btn-generate').addEventListener('click', ()=>{
       const { pairCounts, rowCounts } = currentCounts();
@@ -681,10 +778,53 @@
       const editor = document.getElementById('roster-editor');
       editor.hidden = !rosterEditorOpen;
       if(rosterEditorOpen){
-        document.getElementById('roster-names').value = state.students.join('\n');
-        document.getElementById('roster-rows').value = state.rowSizes.join(',');
+        syncRosterFields();
         document.getElementById('roster-error').hidden = true;
+        document.getElementById('add-student-error').hidden = true;
+        document.getElementById('remove-student-error').hidden = true;
       }
+    });
+
+    document.getElementById('btn-add-student').addEventListener('click', ()=>{
+      const input = document.getElementById('add-student-name');
+      const name = input.value.trim();
+      document.getElementById('add-student-error').hidden = true;
+
+      if(!name){ showAddStudentError('Skriv inn et navn.'); return; }
+      const exists = state.students.some(s=>s.toLowerCase() === name.toLowerCase());
+      if(exists){ showAddStudentError(name + ' er allerede på lista.'); return; }
+
+      state.students.push(name);
+      const growIdx = indexOfSmallest(state.rowSizes);
+      state.rowSizes[growIdx] += 1;
+
+      const { pairCounts, rowCounts } = currentCounts();
+      state.draft = generateArrangement(state.students, state.rowSizes, pairCounts, rowCounts);
+      input.value = '';
+      syncRosterFields();
+      persist();
+      renderAll();
+    });
+
+    document.getElementById('btn-remove-student').addEventListener('click', ()=>{
+      document.getElementById('remove-student-error').hidden = true;
+      if(state.students.length <= 1){
+        showRemoveStudentError('Du kan ikke fjerne den siste eleven.');
+        return;
+      }
+      const sel = document.getElementById('remove-student-select');
+      const name = sel.value;
+      if(!name){ showRemoveStudentError('Velg en elev å fjerne.'); return; }
+
+      state.students = state.students.filter(s=>s !== name);
+      const shrinkIdx = indexOfLargest(state.rowSizes);
+      if(state.rowSizes[shrinkIdx] > 0) state.rowSizes[shrinkIdx] -= 1;
+
+      const { pairCounts, rowCounts } = currentCounts();
+      state.draft = generateArrangement(state.students, state.rowSizes, pairCounts, rowCounts);
+      syncRosterFields();
+      persist();
+      renderAll();
     });
 
     document.getElementById('btn-roster-apply').addEventListener('click', ()=>{
@@ -725,6 +865,7 @@
       state.draft = generateArrangement(state.students, state.rowSizes, pairCounts, rowCounts);
       rosterEditorOpen = false;
       document.getElementById('roster-editor').hidden = true;
+      syncRosterFields();
       persist();
       renderAll();
     });
