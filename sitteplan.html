@@ -18,6 +18,8 @@
     --yellow: #e8c468;
     --blue: #8fb8c9;
     --coral: #e2946b;
+    --mark-grey: #a3ada6;
+    --mark-red: #e0605a;
     --wood: #9c7248;
     --radius: 12px;
   }
@@ -70,8 +72,8 @@
     color: var(--cream-dim);
   }
   .legend-item{ display:flex; align-items:center; gap:8px; }
-  .legend-swatch{ width: 22px; height: 4px; border-radius: 2px; background: var(--board-line); }
-  .legend-swatch.repeat{ background: var(--coral); }
+  .legend-mark{ width: 22px; height: 6px; border-radius: 3px; background: var(--mark-grey); }
+  .legend-mark.repeat{ background: var(--mark-red); }
 
   /* ---------- layout ---------- */
   .layout{
@@ -109,7 +111,11 @@
   .seat{
     flex: 1 1 0;
     background: var(--board-bg-2);
-    padding: 16px 8px;
+    padding: 12px 6px 16px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap: 9px;
     text-align:center;
     font-weight: 600;
     font-size: 0.95rem;
@@ -120,9 +126,18 @@
     flex: 0 0 1px;
     background: var(--board-line);
   }
-  .divider.divider-repeat{
-    flex: 0 0 4px;
-    background: var(--coral);
+  .seat-mark{
+    width: 26px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--mark-grey);
+  }
+  .seat-repeat .seat-mark{ background: var(--mark-red); }
+  .board-summary{
+    margin: 4px 0 0;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: var(--cream-dim);
   }
 
   .board-actions{
@@ -310,8 +325,8 @@
     <h1>Sitteplan</h1>
     <p>Målet er at alle i klassen etter hvert har sittet ved siden av alle andre, og sittet i flere ulike rader, i løpet av året. Denne siden foreslår en ny plassering, og holder styr på hvem som har sittet sammen før og hvilke rader de har sittet i.</p>
     <div class="legend">
-      <div class="legend-item"><span class="legend-swatch"></span> Ny sidemakker</div>
-      <div class="legend-item"><span class="legend-swatch repeat"></span> Har sittet sammen før</div>
+      <div class="legend-item"><span class="legend-mark"></span> Ikke sittet sammen før</div>
+      <div class="legend-item"><span class="legend-mark repeat"></span> Har sittet sammen før</div>
     </div>
   </header>
 
@@ -320,6 +335,7 @@
   <main class="layout" id="app-content" hidden>
     <section class="board-panel">
       <div id="board"></div>
+      <p id="board-summary" class="board-summary"></p>
       <div class="board-actions">
         <button id="btn-generate" class="btn btn-ghost">Lag nytt forslag</button>
         <button id="btn-lock" class="btn btn-primary">Lagre denne plasseringen</button>
@@ -537,6 +553,9 @@
     const board = document.getElementById('board');
     board.innerHTML = '';
     const pairCounts = computePairCounts(state.history);
+    const repeatPairs = [];
+    let totalPairs = 0;
+
     state.draft.forEach((row, rIdx)=>{
       const rowWrap = document.createElement('div');
       rowWrap.className = 'row-wrap';
@@ -545,23 +564,47 @@
       label.textContent = 'Rad ' + (rIdx+1);
       const deskRow = document.createElement('div');
       deskRow.className = 'desk-row';
+
       row.forEach((name, i)=>{
+        // A pupil gets a red mark if they sit next to someone they've sat
+        // beside before, otherwise a grey mark.
+        let hasRepeat = false;
+        if(i > 0 && (pairCounts.get(pairKey(name, row[i-1])) || 0) > 0) hasRepeat = true;
+        if(i < row.length-1 && (pairCounts.get(pairKey(name, row[i+1])) || 0) > 0) hasRepeat = true;
+
         const seat = document.createElement('div');
-        seat.className = 'seat';
-        seat.textContent = name;
+        seat.className = 'seat' + (hasRepeat ? ' seat-repeat' : '');
+        const mark = document.createElement('span');
+        mark.className = 'seat-mark';
+        const nameEl = document.createElement('span');
+        nameEl.textContent = name;
+        seat.appendChild(mark);
+        seat.appendChild(nameEl);
         deskRow.appendChild(seat);
+
         if(i < row.length-1){
-          const count = pairCounts.get(pairKey(name, row[i+1])) || 0;
+          totalPairs++;
+          if((pairCounts.get(pairKey(name, row[i+1])) || 0) > 0){
+            repeatPairs.push(name + ' og ' + row[i+1]);
+          }
           const div = document.createElement('div');
-          div.className = count>0 ? 'divider divider-repeat' : 'divider';
-          if(count>0){ div.title = name + ' og ' + row[i+1] + ' har sittet sammen før'; }
+          div.className = 'divider';
           deskRow.appendChild(div);
         }
       });
+
       rowWrap.appendChild(label);
       rowWrap.appendChild(deskRow);
       board.appendChild(rowWrap);
     });
+
+    const summary = document.getElementById('board-summary');
+    if(repeatPairs.length === 0){
+      summary.textContent = 'Alle ' + totalPairs + ' nabopar er nye.';
+    } else {
+      summary.textContent = (totalPairs - repeatPairs.length) + ' av ' + totalPairs +
+        ' nabopar er nye. Har sittet sammen før: ' + repeatPairs.join(', ') + '.';
+    }
   }
 
   function renderProgress(){
